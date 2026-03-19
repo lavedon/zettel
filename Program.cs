@@ -333,7 +333,7 @@ int RunInteractive()
         var action = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold blue]What would you like to do?[/]")
-                .AddChoices("Search notes", "Search notes (paged)", "Browse tags", "Index vault", "Stats", "Exit"));
+                .AddChoices("Search notes", "Search notes (paged)", "Search by tag", "Browse tags", "Index vault", "Stats", "Exit"));
 
         if (action == "Exit")
             return 0;
@@ -352,6 +352,24 @@ int RunInteractive()
 
             AnsiConsole.WriteLine();
             RunSearch(db, query, paged: action.Contains("paged"));
+            AnsiConsole.WriteLine();
+            continue;
+        }
+
+        if (action == "Search by tag")
+        {
+            var tagQuery = AnsiConsole.Prompt(
+                new TextPrompt<string>("[bold]Tag name (use * for prefix match):[/]")
+                    .AllowEmpty());
+
+            if (string.IsNullOrWhiteSpace(tagQuery))
+            {
+                AnsiConsole.WriteLine();
+                continue;
+            }
+
+            AnsiConsole.WriteLine();
+            RunTag(db, tagQuery, caseSensitive);
             AnsiConsole.WriteLine();
             continue;
         }

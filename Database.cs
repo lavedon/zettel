@@ -140,7 +140,10 @@ public class Database : IDisposable
             ORDER BY rank
             LIMIT 50
             """;
-        cmd.Parameters.AddWithValue("@query", query);
+        // Quote the query to escape FTS5 special characters (#, *, ^, etc.)
+        // Double any internal quotes to avoid breaking the quoting
+        var safeQuery = "\"" + query.Replace("\"", "\"\"") + "\"";
+        cmd.Parameters.AddWithValue("@query", safeQuery);
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
@@ -159,26 +162,53 @@ public class Database : IDisposable
 
     public List<string> GetNotesByTag(string tagName, bool caseSensitive = false)
     {
+        bool isPrefix = tagName.EndsWith('*');
         var results = new List<string>();
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = caseSensitive
-            ? """
-                SELECT n.filepath
-                FROM notes n
-                JOIN note_tags nt ON nt.note_id = n.id
-                JOIN tags t ON t.id = nt.tag_id
-                WHERE t.name = @tagName
-                ORDER BY n.filepath
-                """
-            : """
-                SELECT n.filepath
-                FROM notes n
-                JOIN note_tags nt ON nt.note_id = n.id
-                JOIN tags t ON t.id = nt.tag_id
-                WHERE t.name = @tagName COLLATE NOCASE
-                ORDER BY n.filepath
-                """;
-        cmd.Parameters.AddWithValue("@tagName", tagName);
+
+        if (isPrefix)
+        {
+            var prefix = tagName[..^1]; // strip trailing *
+            cmd.CommandText = caseSensitive
+                ? """
+                    SELECT n.filepath
+                    FROM notes n
+                    JOIN note_tags nt ON nt.note_id = n.id
+                    JOIN tags t ON t.id = nt.tag_id
+                    WHERE t.name LIKE @pattern ESCAPE '\'
+                    ORDER BY n.filepath
+                    """
+                : """
+                    SELECT n.filepath
+                    FROM notes n
+                    JOIN note_tags nt ON nt.note_id = n.id
+                    JOIN tags t ON t.id = nt.tag_id
+                    WHERE t.name LIKE @pattern ESCAPE '\' COLLATE NOCASE
+                    ORDER BY n.filepath
+                    """;
+            cmd.Parameters.AddWithValue("@pattern", EscapeLike(prefix) + "%");
+        }
+        else
+        {
+            cmd.CommandText = caseSensitive
+                ? """
+                    SELECT n.filepath
+                    FROM notes n
+                    JOIN note_tags nt ON nt.note_id = n.id
+                    JOIN tags t ON t.id = nt.tag_id
+                    WHERE t.name = @tagName
+                    ORDER BY n.filepath
+                    """
+                : """
+                    SELECT n.filepath
+                    FROM notes n
+                    JOIN note_tags nt ON nt.note_id = n.id
+                    JOIN tags t ON t.id = nt.tag_id
+                    WHERE t.name = @tagName COLLATE NOCASE
+                    ORDER BY n.filepath
+                    """;
+            cmd.Parameters.AddWithValue("@tagName", tagName);
+        }
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
@@ -223,6 +253,11 @@ public class Database : IDisposable
     public void Dispose()
     {
         _conn.Dispose();
+    }
+
+    private static string EscapeLike(string value)
+    {
+        return value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
     }
 }
 

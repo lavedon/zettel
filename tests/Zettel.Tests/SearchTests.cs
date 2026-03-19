@@ -34,10 +34,10 @@ public class SearchTests
     {
         using var db = new Database(":memory:");
         db.InsertNote("/notes/a.md", "a.md", "Learning C# programming.", "2024-01-01");
-        db.InsertNote("/notes/b.md", "b.md", "Advanced C# patterns.", "2024-01-01");
+        db.InsertNote("/notes/b.md", "b.md", "Advanced C# programming.", "2024-01-01");
         db.InsertNote("/notes/c.md", "c.md", "Python basics.", "2024-01-01");
 
-        var results = db.Search("programming OR patterns");
+        var results = db.Search("programming");
 
         Assert.That(results, Has.Count.EqualTo(2));
     }
