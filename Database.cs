@@ -149,18 +149,27 @@ public class Database : IDisposable
         return results;
     }
 
-    public List<string> GetNotesByTag(string tagName)
+    public List<string> GetNotesByTag(string tagName, bool caseSensitive = false)
     {
         var results = new List<string>();
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT n.filepath
-            FROM notes n
-            JOIN note_tags nt ON nt.note_id = n.id
-            JOIN tags t ON t.id = nt.tag_id
-            WHERE t.name = @tagName
-            ORDER BY n.filepath
-            """;
+        cmd.CommandText = caseSensitive
+            ? """
+                SELECT n.filepath
+                FROM notes n
+                JOIN note_tags nt ON nt.note_id = n.id
+                JOIN tags t ON t.id = nt.tag_id
+                WHERE t.name = @tagName
+                ORDER BY n.filepath
+                """
+            : """
+                SELECT n.filepath
+                FROM notes n
+                JOIN note_tags nt ON nt.note_id = n.id
+                JOIN tags t ON t.id = nt.tag_id
+                WHERE t.name = @tagName COLLATE NOCASE
+                ORDER BY n.filepath
+                """;
         cmd.Parameters.AddWithValue("@tagName", tagName);
         using var reader = cmd.ExecuteReader();
         while (reader.Read())

@@ -2,6 +2,8 @@ using Spectre.Console;
 using Zettel;
 
 bool plain = false;
+bool caseSensitive = false;
+bool paged = false;
 string? dbPath = null;
 string? command = null;
 string? commandArg = null;
@@ -20,6 +22,18 @@ for (int i = 0; i < args.Length; i++)
     if (arg == "plain")
     {
         plain = true;
+        continue;
+    }
+
+    if (arg is "case-sensitive" or "cs")
+    {
+        caseSensitive = true;
+        continue;
+    }
+
+    if (arg is "paged" or "p")
+    {
+        paged = true;
         continue;
     }
 
@@ -84,7 +98,7 @@ switch (command)
             PrintError("Usage: zettel search <query>");
             return 1;
         }
-        RunSearch(db, query);
+        RunSearch(db, query, paged);
         return 0;
 
     case "tag":
@@ -93,7 +107,7 @@ switch (command)
             PrintError("Usage: zettel tag <tag-name>");
             return 1;
         }
-        RunTag(db, commandArg);
+        RunTag(db, commandArg, caseSensitive);
         return 0;
 
     case "tags":
@@ -142,7 +156,7 @@ int RunIndex(Database db, string? vaultPath)
     return 0;
 }
 
-void RunSearch(Database db, string query)
+void RunSearch(Database db, string query, bool paged = false)
 {
     var results = db.Search(query);
 
@@ -158,30 +172,58 @@ void RunSearch(Database db, string query)
         {
             Console.WriteLine(r.Filepath);
             Console.WriteLine($"  {r.Snippet}");
-            Console.WriteLine();
+            Console.WriteLine("────────────────────────────────────────");
+        }
+    }
+    else if (paged)
+    {
+        AnsiConsole.MarkupLine($"[bold blue]Search: {Markup.Escape(query)}[/]  [dim]({results.Count} results)[/]");
+        AnsiConsole.WriteLine();
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            var r = results[i];
+            var snippet = Markup.Escape(r.Snippet)
+                .Replace(">>>", "[bold yellow]")
+                .Replace("<<<", "[/]");
+
+            AnsiConsole.MarkupLine($"[dim]({i + 1}/{results.Count})[/]  [green]{Markup.Escape(r.Filename)}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(r.Filepath)}[/]");
+            AnsiConsole.MarkupLine(snippet);
+            AnsiConsole.Write(new Rule().RuleStyle("dim"));
+
+            if (i < results.Count - 1)
+            {
+                AnsiConsole.MarkupLine("[dim]Enter = next, q = quit[/]");
+                var key = Console.ReadKey(true);
+                if (key.KeyChar is 'q' or 'Q')
+                    break;
+                AnsiConsole.WriteLine();
+            }
         }
     }
     else
     {
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .Title($"[bold blue]Search: {Markup.Escape(query)}[/]  [dim]({results.Count} results)[/]")
-            .AddColumn(new TableColumn("[bold]File[/]"))
-            .AddColumn(new TableColumn("[bold]Snippet[/]"));
+        AnsiConsole.MarkupLine($"[bold blue]Search: {Markup.Escape(query)}[/]  [dim]({results.Count} results)[/]");
+        AnsiConsole.WriteLine();
 
         foreach (var r in results)
         {
-            var snippet = r.Snippet.Replace(">>>", "[bold yellow]").Replace("<<<", "[/]");
-            table.AddRow($"[green]{Markup.Escape(r.Filename)}[/]", snippet);
-        }
+            var snippet = Markup.Escape(r.Snippet)
+                .Replace(">>>", "[bold yellow]")
+                .Replace("<<<", "[/]");
 
-        AnsiConsole.Write(table);
+            AnsiConsole.MarkupLine($"[green]{Markup.Escape(r.Filename)}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Markup.Escape(r.Filepath)}[/]");
+            AnsiConsole.MarkupLine(snippet);
+            AnsiConsole.Write(new Rule().RuleStyle("dim"));
+        }
     }
 }
 
-void RunTag(Database db, string tagName)
+void RunTag(Database db, string tagName, bool caseSensitive = false)
 {
-    var files = db.GetNotesByTag(tagName);
+    var files = db.GetNotesByTag(tagName, caseSensitive);
 
     if (files.Count == 0)
     {
@@ -273,12 +315,12 @@ int RunInteractive()
         var action = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold blue]What would you like to do?[/]")
-                .AddChoices("Search notes", "Browse tags", "Index vault", "Stats", "Exit"));
+                .AddChoices("Search notes", "Search notes (paged)", "Browse tags", "Index vault", "Stats", "Exit"));
 
         if (action == "Exit")
             return 0;
 
-        if (action == "Search notes")
+        if (action is "Search notes" or "Search notes (paged)")
         {
             var query = AnsiConsole.Prompt(
                 new TextPrompt<string>("[bold]Search query:[/]")
@@ -291,7 +333,7 @@ int RunInteractive()
             }
 
             AnsiConsole.WriteLine();
-            RunSearch(db, query);
+            RunSearch(db, query, paged: action.Contains("paged"));
             AnsiConsole.WriteLine();
             continue;
         }
@@ -366,8 +408,10 @@ void PrintUsage()
         Console.WriteLine("  stats                Show database statistics");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  --db <path>          SQLite database path (default: zettel.db)");
+        Console.WriteLine("  --db <path>          SQLite database path (default: C:\\tools\\Data\\zettel.db)");
         Console.WriteLine("  --plain              Plain output (no colors)");
+        Console.WriteLine("  --case-sensitive     Case-sensitive tag lookup (default: case-insensitive)");
+        Console.WriteLine("  --paged, -p          Step through results one at a time");
         Console.WriteLine("  --help, -h           Show this help");
         Console.WriteLine();
         Console.WriteLine("No arguments launches interactive mode.");
@@ -384,8 +428,10 @@ void PrintUsage()
                 new Markup("  [green]stats[/]                Show database statistics"),
                 new Markup(""),
                 new Markup("[bold]Options:[/]"),
-                new Markup("  [green]--db <path>[/]          SQLite database path (default: zettel.db)"),
+                new Markup("  [green]--db <path>[/]          SQLite database path (default: C:\\tools\\Data\\zettel.db)"),
                 new Markup("  [green]--plain[/]              Plain output (no colors)"),
+                new Markup("  [green]--case-sensitive[/]     Case-sensitive tag lookup"),
+                new Markup("  [green]--paged[/], [green]-p[/]         Step through results one at a time"),
                 new Markup("  [green]--help[/], [green]-h[/]           Show this help"),
                 new Markup(""),
                 new Markup("[dim]No arguments launches interactive mode.[/]")
