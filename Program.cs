@@ -194,10 +194,28 @@ void RunSearch(Database db, string query, bool paged = false)
 
             if (i < results.Count - 1)
             {
-                AnsiConsole.MarkupLine("[dim]Enter = next, q = quit[/]");
+                AnsiConsole.MarkupLine("[dim]Enter = next, v = view full note, q = quit[/]");
                 var key = Console.ReadKey(true);
                 if (key.KeyChar is 'q' or 'Q')
                     break;
+                if (key.KeyChar is 'v' or 'V')
+                {
+                    AnsiConsole.WriteLine();
+                    var content = db.GetNoteContent(r.Filepath);
+                    if (content is not null)
+                    {
+                        var panel = new Panel(Markup.Escape(content))
+                            .Header($"[bold blue]{Markup.Escape(r.Filename)}[/]")
+                            .Border(BoxBorder.Rounded)
+                            .Padding(1, 0);
+                        AnsiConsole.Write(panel);
+                    }
+                    AnsiConsole.Write(new Rule().RuleStyle("dim"));
+                    AnsiConsole.MarkupLine("[dim]Enter = next, q = quit[/]");
+                    var nextKey = Console.ReadKey(true);
+                    if (nextKey.KeyChar is 'q' or 'Q')
+                        break;
+                }
                 AnsiConsole.WriteLine();
             }
         }

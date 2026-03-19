@@ -133,7 +133,7 @@ public class Database : IDisposable
         var results = new List<SearchResult>();
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = """
-            SELECT n.filepath, n.filename, snippet(notes_fts, 2, '>>>', '<<<', '...', 32) as snippet
+            SELECT n.filepath, n.filename, snippet(notes_fts, 2, '>>>', '<<<', '...', 64) as snippet
             FROM notes_fts
             JOIN notes n ON n.id = notes_fts.rowid
             WHERE notes_fts MATCH @query
@@ -147,6 +147,14 @@ public class Database : IDisposable
             results.Add(new SearchResult(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
         }
         return results;
+    }
+
+    public string? GetNoteContent(string filepath)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT content FROM notes WHERE filepath = @filepath";
+        cmd.Parameters.AddWithValue("@filepath", filepath);
+        return cmd.ExecuteScalar() as string;
     }
 
     public List<string> GetNotesByTag(string tagName, bool caseSensitive = false)
